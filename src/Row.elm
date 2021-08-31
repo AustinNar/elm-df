@@ -1,4 +1,4 @@
-module Row exposing (..)
+module Row exposing (Row, toDict, fromDict, fromList, select, filter, update, get, map, comp, schema)
 
 
 import Field exposing (..)
@@ -9,11 +9,19 @@ type Row
   = Row (Dict String Field)
 
 
-type alias Selected = List String
+toDict : Row -> Dict String Field
+toDict ( Row row ) = row
 
 
+fromDict : Dict String Field -> Row
+fromDict dict = Row dict
 
-select : Selected -> Row -> Row
+
+fromList : List ( String, Field ) -> Row
+fromList list = fromDict ( Dict.fromList list )
+
+
+select : (List String) -> Row -> Row
 select cols ( Row row ) =
   Row ( Dict.filter ( \k v -> List.member k cols ) row )
 
@@ -21,10 +29,6 @@ select cols ( Row row ) =
 filter : ( Field -> Bool ) -> Row -> Row
 filter predicate ( Row row ) =
   Row ( Dict.filter ( \k v -> predicate v ) row )
-
-
-toDict : Row -> Dict String Field
-toDict ( Row row ) = row
 
 
 update : String -> Field -> Row -> Row
@@ -45,4 +49,18 @@ map col calc row =
 comp : Calc Row -> Row -> Row -> Order
 comp calc left right =
   Field.comp ( calc left ) ( calc right )
+
+
+schema : Row -> List ( String, Field )
+schema row = 
+  row
+  |> toDict
+  |> Dict.toList
+  |> List.map (
+      \(name, field) -> 
+        case field of 
+          NumericField _ -> (name, NumericField 0)
+          StringField _ -> (name, StringField "")
+          UndefinedField _ -> (name, UndefinedField "")
+    )
 

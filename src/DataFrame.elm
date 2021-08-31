@@ -1,6 +1,6 @@
-module DataFrame exposing (DataFrame, DFResult, fromRows, getSelected, getRows, select, map, add, mult, col, numLit, sortBy)
+module DataFrame exposing (DataFrame, DFResult, fromList, getSelected, getRows, select, map, add, mult, col, numLit, sortBy)
 
-import Row exposing (Row(..))
+import Row exposing (Row)
 import Field exposing (Calc, Field(..))
 import List
 import String
@@ -15,37 +15,44 @@ import Result exposing (Result)
 
 -- Custom Types
 
-type alias Selected = List String
-
-
 type DataFrame 
-  = DataFrame ( List Row ) Selected
-
-
-fromRows : List Row -> DFResult
-fromRows rows =
-  let
-    colList = 
-      rows
-      |> List.map Row.toDict 
-      |> List.map Dict.keys
-      |> List.map Set.fromList
-    first = Maybe.withDefault Set.empty ( List.head colList )
-  in
-    if List.all ( \cols -> cols == first ) colList then
-      Ok ( DataFrame rows (Set.toList first) )
-    else
-      Err "Rows do not have consistent set of fields"
-
-
+  = DataFrame ( List Row ) ( List String )
 
 
 type alias DFResult = Result String DataFrame
 
 
 
-fields : Row -> Selected
-fields ( Row rdict ) = Dict.keys rdict
+fromList : List String -> List ( List Field ) -> DFResult
+fromList names rows =
+  let 
+    head = List.head rows
+  in
+  case head of
+    Nothing -> Ok ( DataFrame [] names )
+    Just first ->
+      let
+        getType = \field ->
+          case field of
+            NumericField _ -> 0
+            StringField _ -> 1
+            UndefinedField _ -> 2
+        getTypes = List.map getType
+        firstTypes = getTypes first
+        firstLength = List.length first
+        namesLength = List.length names
+      in
+      if not ( List.all ( \row -> ( getTypes row ) == firstTypes ) rows ) then
+        Err "Rows do not have consistent types."
+      else if not ( List.all ( \row -> List.length row == firstLength ) rows ) then
+        Err "Rows do not have a consistent number of fields."
+      else if namesLength /= firstLength then
+        Err ( "Rows have " ++ ( String.fromInt firstLength ) ++ " fields but " ++ ( String.fromInt namesLength ) ++ " field names were passed." )
+      else
+        Ok ( DataFrame ( List.map ( \row -> Row.fromList ( List.map2 ( \name field -> ( name, field ) ) names row ) ) rows ) names )
+
+fields : Row -> List String
+fields row = Dict.keys ( Row.toDict row )
 
 
 -- Custom Functions for manipulating DataFrames
@@ -54,7 +61,7 @@ getRows : DataFrame -> List Row
 getRows ( DataFrame rows _ ) = rows
 
 
-getSelected : DataFrame -> Selected
+getSelected : DataFrame -> List String
 getSelected ( DataFrame _ selected ) = selected
 
 
@@ -77,7 +84,7 @@ errIfUndefined df =
 
 
 
-select : Selected -> DataFrame -> DFResult
+select : List String -> DataFrame -> DFResult
 select cols df =
   let
     missing = List.head
@@ -87,7 +94,7 @@ select cols df =
           ( Set.fromList 
             ( fields
               ( Maybe.withDefault 
-                ( Row Dict.empty )
+                ( Row.fromDict Dict.empty )
                 ( List.head ( getRows df ) ) 
               ) 
             )
